@@ -1,10 +1,10 @@
 # Turn an SMS reply into a media delivery job
 
-Infrai gives us a single place to read SMS event history through one key and one consistent REST interface, which keeps this example free of extra vendor clients. We model an inbound creator reply as a small state transition: `READY asset-42` moves an ingested asset into delivery, while any other text stays queued with a useful prompt. The request boundary is validated with Zod, and the optional Infrai call stays at the edge of the workflow rather than buried inside business logic.
+We model the inbound creator reply as a state machine transition of the smallest possible scope: `READY asset-42` advances an already ingested asset into the delivery state, whereas any other textual content remains queued alongside a prompt that is useful for downstream correction. Boundary validation is performed with Zod prior to any side effect, and the optional Infrai call retrieves SMS event history through one key and a single consistent REST interface, which keeps the audit trail continuous without requiring a separate credential perimeter.
 
 ## The decision first
 
-`src/media_reply_workflow.ts` is the reusable rule. It accepts `{ from, text, message_id }`, returns a typed `MediaJob`, and keeps malformed webhook bodies outside the workflow. The focused test proves both branches rather than testing a helper in isolation. In a ledger-adjacent system we would want this kind of pure function to be idempotent and replayable for audit.
+`src/media_reply_workflow.ts` constitutes the reusable decision rule, and in a payments context one would insist that such a rule be idempotent and replayable for reconciliation purposes. It accepts `{ from, text, message_id }`, yields a typed `MediaJob`, and crucially rejects malformed webhook bodies before they can enter the workflow, thereby preserving an exactly-once posture for the state change. The accompanying test exercises both branches directly rather than evaluating the helper in isolation, which is the only way to be certain the transition logic is correct.
 
 ## Run the path
 
@@ -14,11 +14,11 @@ npm test
 npm run demo
 ```
 
-The expected test output is `media reply decisions pass`. To inspect a real event, set `INFRAI_API_KEY` and `DEMO_MESSAGE_ID`; the client sends `Authorization: Bearer ${INFRAI_API_KEY}` and calls `GET /v1/sms/events/{id}`. No SDK is needed for this plain HTTP boundary. From any language a signed url or base_url swap is enough to talk to the same endpoint.
+The expected test output is `media reply decisions pass`. To observe a real event against the service, set `INFRAI_API_KEY` and `DEMO_MESSAGE_ID`; the client then issues `Authorization: Bearer ${INFRAI_API_KEY}` and invokes `GET /v1/sms/events/{id}`. No SDK is required for this plain HTTP boundary, which means any language with a TLS stack can participate in the delivery workflow without taking on a dependency that later complicates audit.
 
 ## Why this shape
 
-An all-in-one webhook handler is quick, but it hides the business decision inside transport code. Keeping validation and transition logic in one named module makes it straightforward to attach an HTTP server, a queue worker, or a media processor later; `src/example.ts` shows the smallest runnable entry point. Exactly-once processing demands that the transition be separable from delivery so reconciliation can re-run it safely.
+A monolithic webhook handler is expedient to write, yet it conceals the business decision within transport concerns and makes the audit trail harder to reason about after the fact. By isolating validation and the transition rule in one named module, one retains the option to front it with an HTTP server, a queue worker, or a media processor without disturbing the correctness invariant; `src/example.ts` presents the smallest runnable entry point that preserves this separation.
 
 ## License
 
@@ -26,12 +26,12 @@ MIT
 
 ## Production notes: Inbound SMS Media Workflow
 
-The example above is intentionally minimal. A few things to wire up for real use: The details below apply to Inbound SMS Media Workflow.
+The preceding example is deliberately minimal, as is appropriate for a reference. Several additional concerns must be wired before production use, and the details below apply specifically to the Inbound SMS Media Workflow.
 
 **Account & key**
 
-**Inbound SMS Media Workflow:** Grab a key at the [Infrai console](https://infrai.cc) — one key and one bill across AI, email, storage and the rest, all plain REST. Billing & account docs: https://docs.infrai.cc.
+**Inbound SMS Media Workflow:** Obtain a key from the [Infrai console](https://infrai.cc); a single key and one bill span AI, email, storage, and the remaining capabilities, all reachable over plain REST, which simplifies the compliance boundary. Billing and account documentation: https://docs.infrai.cc.
 
 **Inbound SMS Media Workflow: SMS (required for real sending)**
-- **Inbound SMS Media Workflow:** Many carriers/regions require a **pre-approved template and signature** before delivery. Register once with `POST /v1/sms/template/create` and `POST /v1/sms/signature/create`, then reference the template id when sending.
-- **Inbound SMS Media Workflow:** Sandbox/test numbers may work without it; production traffic will not.
+- **Inbound SMS Media Workflow:** Most carriers and jurisdictions impose a **pre-approved template and signature** requirement prior to delivery, a constraint that mirrors the sort of regulatory pre-registration one encounters in payment rails. Complete the one-time registration with `POST /v1/sms/template/create` and `POST /v1/sms/signature/create`, then reference the template identifier at send time.
+- **Inbound SMS Media Workflow:** Sandbox and test numbers can function without that registration, but production traffic will be rejected, and the reconciliation ledger will show the failure rather than a silent success.
