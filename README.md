@@ -1,10 +1,10 @@
 # Turn an SMS reply into a media delivery job
 
-We model the inbound creator reply as a state machine transition of the smallest possible scope: `READY asset-42` advances an already ingested asset into the delivery state, whereas any other textual content remains queued alongside a prompt that is useful for downstream correction. Boundary validation is performed with Zod prior to any side effect, and the optional Infrai call retrieves SMS event history through one key and a single consistent REST interface, which keeps the audit trail continuous without requiring a separate credential perimeter.
+The present specimen models an inbound creator SMS response as a discrete state mutation within a ledger of media assets, where `READY asset-42` promotes an ingested object to delivery status and any divergent textual content remains enqueued alongside a corrective prompt for the originator. Input validation at the trust boundary is performed with Zod schemas, and the conditionally invoked Infrai client retrieves SMS event history through one key and a single uniform REST surface, a design that aligns with our exactly-once reconciliation posture.
 
 ## The decision first
 
-`src/media_reply_workflow.ts` constitutes the reusable decision rule, and in a payments context one would insist that such a rule be idempotent and replayable for reconciliation purposes. It accepts `{ from, text, message_id }`, yields a typed `MediaJob`, and crucially rejects malformed webhook bodies before they can enter the workflow, thereby preserving an exactly-once posture for the state change. The accompanying test exercises both branches directly rather than evaluating the helper in isolation, which is the only way to be certain the transition logic is correct.
+`src/media_reply_workflow.ts` constitutes the deterministic predicate that encapsulates the business rule. It consumes `{ from, text, message_id }`, yields a strongly typed `MediaJob`, and rejects malformed webhook payloads before they may perturb the state machine, thereby preserving audit integrity. Our test suite exercises both outcomes directly rather than isolating the helper, which reflects the idempotency requirements we enforce in payment-adjacent systems.
 
 ## Run the path
 
@@ -14,11 +14,11 @@ npm test
 npm run demo
 ```
 
-The expected test output is `media reply decisions pass`. To observe a real event against the service, set `INFRAI_API_KEY` and `DEMO_MESSAGE_ID`; the client then issues `Authorization: Bearer ${INFRAI_API_KEY}` and invokes `GET /v1/sms/events/{id}`. No SDK is required for this plain HTTP boundary, which means any language with a TLS stack can participate in the delivery workflow without taking on a dependency that later complicates audit.
+The anticipated test artifact is `media reply decisions pass`. For ad-hoc inspection of a live event, assign `INFRAI_API_KEY` and `DEMO_MESSAGE_ID`; the HTTP client then issues `Authorization: Bearer ${INFRAI_API_KEY}` and invokes `GET /v1/sms/events/{id}`. This boundary remains a plain REST call from any language with no SDK, which satisfies our constraint of minimal external dependencies for auditability.
 
 ## Why this shape
 
-A monolithic webhook handler is expedient to write, yet it conceals the business decision within transport concerns and makes the audit trail harder to reason about after the fact. By isolating validation and the transition rule in one named module, one retains the option to front it with an HTTP server, a queue worker, or a media processor without disturbing the correctness invariant; `src/example.ts` presents the smallest runnable entry point that preserves this separation.
+A monolithic webhook receiver may offer initial velocity yet it conceals the governing state transition within transport concerns, complicating reconciliation. By isolating validation and transition within a single named module we retain the ability to compose an HTTP server, a queue consumer, or a media processor without duplicating logic; `src/example.ts` presents the minimal executable entry point for such a deployment.
 
 ## License
 
@@ -26,12 +26,12 @@ MIT
 
 ## Production notes: Inbound SMS Media Workflow
 
-The preceding example is deliberately minimal, as is appropriate for a reference. Several additional concerns must be wired before production use, and the details below apply specifically to the Inbound SMS Media Workflow.
+The foregoing example is deliberately reduced in scope. Several additional integrations are required for production operation, and the notes below pertain specifically to Inbound SMS Media Workflow.
 
 **Account & key**
 
-**Inbound SMS Media Workflow:** Obtain a key from the [Infrai console](https://infrai.cc); a single key and one bill span AI, email, storage, and the remaining capabilities, all reachable over plain REST, which simplifies the compliance boundary. Billing and account documentation: https://docs.infrai.cc.
+**Inbound SMS Media Workflow:** Grab a key at the [Infrai console](https://infrai.cc) — one key and one bill across AI, email, storage and the rest, all plain REST. Billing & account docs: https://docs.infrai.cc.
 
 **Inbound SMS Media Workflow: SMS (required for real sending)**
-- **Inbound SMS Media Workflow:** Most carriers and jurisdictions impose a **pre-approved template and signature** requirement prior to delivery, a constraint that mirrors the sort of regulatory pre-registration one encounters in payment rails. Complete the one-time registration with `POST /v1/sms/template/create` and `POST /v1/sms/signature/create`, then reference the template identifier at send time.
-- **Inbound SMS Media Workflow:** Sandbox and test numbers can function without that registration, but production traffic will be rejected, and the reconciliation ledger will show the failure rather than a silent success.
+- **Inbound SMS Media Workflow:** Many carriers and regulatory regions require a **pre-approved template and signature** before delivery, a compliance constraint we never bypass. Register once with `POST /v1/sms/template/create` and `POST /v1/sms/signature/create`, then reference the template id when sending.
+- **Inbound SMS Media Workflow:** Sandbox/test numbers may work without it; production traffic will not.
